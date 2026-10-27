@@ -1,0 +1,42 @@
+# Filmes
+
+App de recomendação de filmes. Swipe para gostei/não gostei, busca, filmes semelhantes, listas "Ver depois" e "Já vi", e importação opcional do Letterboxd.
+
+## Como rodar
+
+1. Copie `config.example.js` para `config.js` e coloque sua chave do TMDB. `config.js` está no `.gitignore` e nunca vai para o repositório.
+2. Abra `index.html` no navegador, ou sirva a pasta com qualquer servidor estático (ex.: `npx serve .`).
+
+## Publicação (GitHub Pages)
+
+O workflow `.github/workflows/pages.yml` publica a cada push na `main`. Ele gera `config.js` a partir do secret `TMDB_KEY` do repositório (Settings → Secrets and variables → Actions). A chave fica visível no site publicado, como em qualquer app TMDB só de front-end, mas não fica no código.
+
+## Arquivos
+
+- `index.html`: telas (Descobrir, Buscar, Listas) e modal de detalhes.
+- `app.js`: lógica, chamadas ao TMDB, swipe, listas e importação do Letterboxd.
+- `style.css`: visual.
+- `config.example.js`: modelo do `config.js` (chave da API do TMDB, `TMDB_KEY`).
+
+## Recomendação
+
+- Filmes marcados como "gostei" (até 5 mais recentes) puxam recomendações e similares do TMDB.
+- Candidatos que aparecem em mais de uma fonte sobem na lista.
+- Filmes já vistos ou marcados não voltam. Sem histórico, o app mostra populares.
+
+## Importar do Letterboxd (opcional)
+
+Letterboxd → Settings → Data → Export. Extraia o zip e envie `watched.csv`, `ratings.csv` e/ou `watchlist.csv`.
+
+- Nota >= 3,5 vira "gostei"; nota <= 2 vira "não gostei"; sem nota só marca como "já vi".
+- Reimportar substitui o que veio do Letterboxd: o que saiu do export some das listas. Marcações feitas manualmente no app são preservadas.
+- Um site não consegue observar uma pasta. "Atualizar sozinho" aqui significa: ao reimportar, tudo se recalcula.
+
+## Dados
+
+Tudo fica no `localStorage` do navegador. Não há conta nem servidor.
+
+## Próximos passos
+
+- Empacotar como APK (ex.: Capacitor ou TWA) apontando para o site.
+- Publicar em dmwnezes.com/filmes.

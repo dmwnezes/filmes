@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Filmes</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Filmes</h1>
+    <nav>
+      <button data-tab="descobrir" class="on">Descobrir</button>
+      <button data-tab="buscar">Buscar</button>
+      <button data-tab="listas">Listas</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="descobrir" class="tab on">
+      <div id="deck"></div>
+      <div class="actions">
+        <button id="bNo" class="no" title="Não gostei (←)">✕</button>
+        <button id="bLater" class="later" title="Ver depois (↓)">⏱</button>
+        <button id="bYes" class="yes" title="Gostei (→)">✓</button>
+      </div>
+      <p class="muted center">Arraste para a direita se gostou, para a esquerda se não gostou.</p>
+    </section>
+
+    <section id="buscar" class="tab">
+      <form id="sForm">
+        <input id="q" placeholder="Buscar filme..." autocomplete="off">
+        <button>Buscar</button>
+      </form>
+      <div id="results" class="grid"></div>
+    </section>
+
+    <section id="listas" class="tab">
+      <h2>Ver depois <small id="cLater"></small></h2>
+      <div id="lLater" class="grid"></div>
+      <h2>Já vi <small id="cSeen"></small></h2>
+      <div id="lSeen" class="grid"></div>
+
+      <details class="import">
+        <summary>Importar do Letterboxd (opcional)</summary>
+        <p class="muted">No Letterboxd: Settings → Data → Export. Extraia o zip e envie aqui <code>watched.csv</code>, <code>ratings.csv</code> e/ou <code>watchlist.csv</code>. Reimportar atualiza o que veio do Letterboxd: o que sumiu do export some daqui também.</p>
+        <input type="file" id="lbFiles" accept=".csv" multiple>
+        <button id="lbGo">Importar</button>
+        <p id="lbStatus" class="muted"></p>
+      </details>
+    </section>
+  </main>
+
+  <dialog id="modal">
+    <div id="mBody"></div>
+    <button id="mClose">Fechar</button>
+  </dialog>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

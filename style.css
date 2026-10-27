@@ -17,7 +17,8 @@ small { color: #9a93a8; font-weight: normal; }
 #deck { display: flex; justify-content: center; min-height: 520px; }
 .card { width: min(340px, 100%); background: #221e2e; border-radius: 22px; overflow: hidden; box-shadow: 0 10px 30px #0006; cursor: grab; user-select: none; touch-action: pan-y; }
 .card.top { position: relative; }
-.card img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; display: block; background: #2a2636; pointer-events: none; }
+.card img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; display: block; background: #2a2636; }
+.card.top img { pointer-events: none; } /* só no swipe, para não arrastar a imagem */
 .card .info { padding: 14px 16px 18px; }
 .card h3 { margin: 0 0 4px; font-size: 1.15rem; }
 .genres { color: #f2c14e; font-size: 0.85rem; margin: 0 0 8px; }

@@ -283,6 +283,7 @@ async function resolveLb(name, year, cache) {
 $('#lbGo').onclick = async () => {
   const files = [...$('#lbFiles').files];
   const st = $('#lbStatus');
+  st.textContent = 'Lendo arquivos…';
   const kinds = {};
   for (const f of files) {
     const n = f.name.toLowerCase();

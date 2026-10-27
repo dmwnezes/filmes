@@ -1,0 +1,29 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.dmwnezes.filmes'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.dmwnezes.filmes'
+        minSdk 24
+        targetSdk 34
+        versionCode Integer.parseInt(System.getenv('VERSION_CODE') ?: '1')
+        versionName "1.0." + (System.getenv('VERSION_CODE') ?: '1')
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Assina com a chave de debug: suficiente para instalar fora da Play Store.
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

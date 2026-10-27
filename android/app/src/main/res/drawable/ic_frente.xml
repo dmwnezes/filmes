@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dois cartões (deck de swipe) com um play. Área segura do ícone adaptativo: 66dp centrais de 108dp. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:pivotX="54" android:pivotY="54" android:rotation="-12">
+        <path android:fillColor="#7A6230"
+            android:pathData="M40,30h28a5,5 0 0 1 5,5v38a5,5 0 0 1 -5,5h-28a5,5 0 0 1 -5,-5v-38a5,5 0 0 1 5,-5z" />
+    </group>
+    <group android:pivotX="54" android:pivotY="54" android:rotation="8" android:translateX="3">
+        <path android:fillColor="#F2C14E"
+            android:pathData="M40,30h28a5,5 0 0 1 5,5v38a5,5 0 0 1 -5,5h-28a5,5 0 0 1 -5,-5v-38a5,5 0 0 1 5,-5z" />
+        <path android:fillColor="#15131C" android:pathData="M49,45 L63,54 L49,63 Z" />
+    </group>
+</vector>

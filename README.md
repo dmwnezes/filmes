@@ -36,7 +36,10 @@ Letterboxd → Settings → Data → Export. Extraia o zip e envie `watched.csv`
 
 Tudo fica no `localStorage` do navegador. Não há conta nem servidor.
 
-## Próximos passos
+## APK (Android)
 
-- Empacotar como APK (ex.: Capacitor ou TWA) apontando para o site.
-- Publicar em dmwnezes.com/filmes.
+A pasta `android/` é um app WebView que abre https://dmwnezes.com/filmes/. O workflow `.github/workflows/apk.yml` compila e publica o APK nas Releases quando algo em `android/` muda (ou manualmente em Actions → Gerar APK).
+
+Download da versão mais recente: https://github.com/dmwnezes/filmes/releases/latest/download/filmes.apk
+
+Mudanças no site (`index.html`, `app.js`, `style.css`) aparecem no app sem reinstalar.

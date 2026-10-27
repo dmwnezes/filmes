@@ -43,3 +43,11 @@ A pasta `android/` é um app WebView que abre https://dmwnezes.com/filmes/. O wo
 Download da versão mais recente: https://github.com/dmwnezes/filmes/releases/latest/download/filmes.apk
 
 Mudanças no site (`index.html`, `app.js`, `style.css`) aparecem no app sem reinstalar.
+
+## Como o Descobrir escolhe
+
+- Perfil feito do seu histórico: curtidos (peso 1), "não gostei" (peso -1) e vistos sem nota, como os do Letterboxd (peso 0,3), somados por gênero.
+- Sementes: as 5 curtidas mais recentes mais 3 antigas sorteadas. Com poucas curtidas, entram filmes vistos.
+- Candidatos vêm das recomendações e dos semelhantes do TMDB de cada semente. Semelhantes só contam se dividirem um gênero com a semente. Recomendações de filmes que você não gostou derrubam a nota.
+- A nota final soma a força das sementes, a afinidade de gênero e a avaliação do filme. Cada cartão mostra o motivo.
+- Esgotou? Busca os mais bem avaliados dos seus 2 gêneros favoritos, sem os gêneros que você rejeita. Sem histórico nenhum, mostra os populares.

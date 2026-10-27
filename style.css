@@ -22,6 +22,7 @@ small { color: #9a93a8; font-weight: normal; }
 .card .info { padding: 14px 16px 18px; }
 .card h3 { margin: 0 0 4px; font-size: 1.15rem; }
 .genres { color: #f2c14e; font-size: 0.85rem; margin: 0 0 8px; }
+.why { font-size: 0.8rem; color: #9fd3b0; margin: 0 0 8px; }
 .syn { font-size: 0.92rem; line-height: 1.4; color: #d8d2c6; margin: 0; }
 .status { display: inline-block; margin-top: 8px; font-size: 0.8rem; color: #15131c; background: #f2c14e; border-radius: 6px; padding: 2px 8px; }
 .actions { display: flex; justify-content: center; gap: 22px; margin: 18px 0 8px; }

@@ -21,10 +21,16 @@ async function tm(path, params = {}) {
   u.searchParams.set('api_key', CFG.TMDB_KEY);
   u.searchParams.set('language', 'pt-BR');
   for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
-  const r = await fetch(u);
-  if (!r.ok) throw new Error('TMDB ' + r.status);
-  return r.json();
+  const key = u.toString();
+  if (!TM_CACHE.has(key)) {
+    TM_CACHE.set(key, fetch(u).then((r) => {
+      if (!r.ok) throw new Error('TMDB ' + r.status);
+      return r.json();
+    }).catch((e) => { TM_CACHE.delete(key); throw e; }));
+  }
+  return TM_CACHE.get(key);
 }
+const TM_CACHE = new Map(); // shortcut: cache só da sessão; some ao fechar o app
 
 function norm(m) {
   const genres = m.genres ? m.genres.map((g) => g.name) : (m.genre_ids || []).map((i) => GENRES[i]).filter(Boolean);
@@ -74,7 +80,8 @@ function act(id, action) {
   if (action === 'later') mark(m, { list: 'later' });
   if (action === 'seen') mark(m, { list: 'seen' });
   if (action === 'del') unmark(id);
-  deck = deck.filter((d) => d.id !== id);
+  // histórico mudou fora do swipe: refaz o deck com o perfil novo
+  deck = action === 'later' ? deck.filter((d) => d.id !== id) : [];
   refreshAll();
 }
 
@@ -96,10 +103,11 @@ function refreshAll() {
 function card(m, cls = '') {
   const st = status(m.id);
   return `<article class="card ${cls}" data-card="${m.id}">
-    <img class="poster" data-open="${m.id}" src="${m.poster ? IMG + m.poster : ''}" alt="" loading="lazy">
+    <img class="poster" data-open="${m.id}" src="${m.poster ? IMG + m.poster : ''}" alt="" loading="${cls === 'top' ? 'eager' : 'lazy'}">
     <div class="info">
       <h3>${esc(m.title)} <small>${esc(m.year)}</small></h3>
       <p class="genres">${esc(m.genres.join(' · '))}</p>
+      ${m.why && cls === 'top' ? `<p class="why">${esc(m.why)}</p>` : ''}
       <p class="syn">${esc(short(m.overview || 'Sem sinopse.'))}</p>
       ${st ? `<span class="status">${st}</span>` : ''}
     </div>
@@ -121,39 +129,110 @@ function gridItem(m) {
 }
 
 // ---------- descobrir (swipe) ----------
-async function fillDeck() {
-  const liked = Object.values(DB).filter((x) => x.like === true).sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0)).slice(0, 5);
-  let pool = [];
-  if (liked.length) {
-    const counts = new Map();
-    const res = await Promise.allSettled(liked.flatMap((m) => [tm(`/movie/${m.id}/recommendations`), tm(`/movie/${m.id}/similar`)]));
-    for (const r of res) {
-      if (r.status !== 'fulfilled') continue;
-      for (const x of r.value.results || []) {
-        if (!x.poster_path) continue;
-        const c = counts.get(x.id) || { n: 0, x };
-        c.n++;
-        counts.set(x.id, c);
-      }
+// Perfil do histórico: curtidas puxam, "não gostei" afasta, vistos sem nota (ex.: Letterboxd) pesam pouco.
+const known = (id) => !!DB[id] && (!!DB[id].list || DB[id].like !== undefined);
+const byRecent = (a, b) => (b.addedAt || 0) - (a.addedAt || 0);
+
+function profile() {
+  const all = Object.values(DB);
+  const liked = all.filter((x) => x.like === true).sort(byRecent);
+  const disliked = all.filter((x) => x.like === false).sort(byRecent);
+  const watched = all.filter((x) => x.list === 'seen' && x.like === undefined);
+  const genres = {};
+  const add = (list, w) => list.forEach((m) => (m.genres || []).forEach((g) => (genres[g] = (genres[g] || 0) + w)));
+  add(liked, 1);
+  add(watched, 0.3);
+  add(disliked, -1);
+  return { liked, disliked, watched, genres };
+}
+
+const shuffle = (a) => a.map((x) => [Math.random(), x]).sort((p, q) => p[0] - q[0]).map((p) => p[1]);
+
+// Sementes: as 5 curtidas mais recentes + 3 antigas sorteadas (variedade). Poucas curtidas? Completa com vistos.
+function seeds(p) {
+  const s = [...p.liked.slice(0, 5), ...shuffle(p.liked.slice(5)).slice(0, 3)].map((m) => ({ m, w: 1 }));
+  if (s.length < 3) s.push(...shuffle(p.watched).slice(0, 5 - s.length).map((m) => ({ m, w: 0.5 })));
+  return s;
+}
+
+// sources: [{ seed, w, kind: 'rec'|'sim'|'neg', results }]. Devolve candidatos ordenados com o motivo.
+function rank(p, sources) {
+  const max = Math.max(1, ...Object.values(p.genres).map(Math.abs));
+  const c = new Map();
+  for (const src of sources) {
+    const k = src.kind === 'rec' ? 1 : src.kind === 'sim' ? 0.7 : -1;
+    for (const x of src.results || []) {
+      if (!x.poster_path || known(x.id)) continue;
+      // "similar" do TMDB é ruidoso: só vale se dividir ao menos um gênero com o filme de origem
+      if (src.kind === 'sim' && !(x.genre_ids || []).some((i) => (src.seed.genres || []).includes(GENRES[i]))) continue;
+      const e = c.get(x.id) || { x, s: 0, best: 0, why: '' };
+      e.s += k * src.w;
+      if (k * src.w > e.best) { e.best = k * src.w; e.why = src.seed.title; }
+      c.set(x.id, e);
     }
-    pool = [...counts.values()].sort((a, b) => b.n - a.n || b.x.vote_average - a.x.vote_average).map((c) => c.x);
   }
-  if (pool.length < 10) {
-    const p = await tm('/movie/popular', { page: Math.floor(Math.random() * 5) + 1 });
-    pool.push(...p.results.filter((x) => x.poster_path));
+  return [...c.values()].map((e) => {
+    const gs = (e.x.genre_ids || []).map((i) => (p.genres[GENRES[i]] || 0) / max);
+    const affinity = gs.length ? gs.reduce((a, b) => a + b, 0) / gs.length : 0;
+    const quality = (e.x.vote_count || 0) > 50 ? ((e.x.vote_average || 6) - 6) / 4 : -0.2;
+    return { ...e, score: e.s + 0.8 * affinity + 0.3 * quality };
+  }).filter((e) => e.s > 0).sort((a, b) => b.score - a.score);
+}
+
+const topGenres = (p) => Object.entries(p.genres).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([g]) => g);
+let discoverPage = 1;
+let filling = null;
+
+function fillDeck() {
+  filling = filling || buildDeck().finally(() => (filling = null)); // evita duas buscas ao mesmo tempo
+  return filling;
+}
+
+async function buildDeck() {
+  const p = profile();
+  const add = (x, why) => {
+    if (deck.length >= 10 || known(x.id) || deck.some((d) => d.id === x.id) || !x.poster_path) return;
+    deck.push({ ...norm(x), why });
+  };
+
+  const sd = seeds(p);
+  if (sd.length) {
+    const jobs = [
+      ...sd.flatMap(({ m, w }) => [
+        tm(`/movie/${m.id}/recommendations`).then((r) => ({ seed: m, w, kind: 'rec', results: r.results })),
+        tm(`/movie/${m.id}/similar`).then((r) => ({ seed: m, w, kind: 'sim', results: r.results })),
+      ]),
+      ...p.disliked.slice(0, 3).map((m) => tm(`/movie/${m.id}/recommendations`).then((r) => ({ seed: m, w: 0.5, kind: 'neg', results: r.results }))),
+    ];
+    const sources = (await Promise.allSettled(jobs)).filter((r) => r.status === 'fulfilled').map((r) => r.value);
+    for (const e of rank(p, sources)) add(e.x, `Porque você gostou de ${e.why}`);
   }
-  for (const x of pool) {
-    if (deck.length >= 10) break;
-    if (isSeen(x.id) || deck.some((d) => d.id === x.id)) continue;
-    deck.push(norm(x));
+
+  // Acabaram as sugestões das sementes: busca pelos gêneros que você mais curte.
+  const tg = topGenres(p);
+  if (deck.length < 10 && tg.length) {
+    const ids = Object.entries(GENRES).filter(([, n]) => tg.includes(n)).map(([i]) => i);
+    const r = await tm('/discover/movie', { with_genres: ids.join('|'), sort_by: 'vote_average.desc', 'vote_count.gte': 500, page: discoverPage++ });
+    const bad = new Set(Object.entries(p.genres).filter(([, v]) => v < 0).map(([g]) => g));
+    for (const x of r.results || []) if (!(x.genre_ids || []).some((i) => bad.has(GENRES[i]))) add(x, `Porque você curte ${tg.join(' e ')}`);
+  }
+
+  // Sem histórico nenhum: populares.
+  if (!deck.length && !p.liked.length) {
+    const r = await tm('/movie/popular', { page: Math.floor(Math.random() * 5) + 1 });
+    for (const x of r.results || []) add(x, 'Em alta agora');
   }
   renderDeck();
 }
 
 function renderDeck() {
   const el = $('#deck');
+  const p = profile();
+  $('#perfil').textContent = p.liked.length + p.watched.length
+    ? `Baseado no seu histórico: ${p.liked.length} curtidos, ${p.disliked.length} não curtidos, ${p.watched.length} vistos sem nota.`
+    : 'Sem histórico ainda: curta alguns filmes ou importe do Letterboxd para personalizar.';
   if (!deck.length) {
-    el.innerHTML = '<p class="muted center">Carregando sugestões…</p>';
+    el.innerHTML = `<p class="muted center">${filling ? 'Carregando sugestões…' : 'Sem novas sugestões agora. Curta mais filmes na Busca.'}</p>`;
     return;
   }
   el.innerHTML = card(deck[0], 'top');
@@ -325,6 +404,7 @@ $('#lbGo').onclick = async () => {
   for (const id in DB) if (DB[id].src === 'lb' && DB[id].like === undefined && !DB[id].list) delete DB[id];
   saveDB();
   st.textContent = `Pronto: ${jobs.length} linhas processadas.`;
+  deck = []; // perfil novo vindo do Letterboxd
   refreshAll();
 };
 

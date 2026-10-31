@@ -13,6 +13,7 @@
       <button data-tab="descobrir" class="on">Descobrir</button>
       <button data-tab="buscar">Buscar</button>
       <button data-tab="listas">Listas</button>
+      <button data-tab="stats">Perfil</button>
     </nav>
   </header>
 
@@ -44,11 +45,15 @@
 
       <details class="import">
         <summary>Importar do Letterboxd (opcional)</summary>
-        <p class="muted">No Letterboxd: Settings → Data → Export. Extraia o zip e envie aqui <code>watched.csv</code>, <code>ratings.csv</code> e/ou <code>watchlist.csv</code>. Reimportar atualiza o que veio do Letterboxd: o que sumiu do export some daqui também.</p>
+        <p class="muted">No Letterboxd: Settings → Data → Export. Extraia o zip e envie aqui <code>diary.csv</code>, <code>watched.csv</code>, <code>ratings.csv</code> e/ou <code>watchlist.csv</code>. O <code>diary.csv</code> traz a data em que você assistiu, usada nas estatísticas do Perfil. Reimportar atualiza o que veio do Letterboxd: o que sumiu do export some daqui também.</p>
         <input type="file" id="lbFiles" accept=".csv" multiple>
         <button id="lbGo">Importar</button>
         <p id="lbStatus" class="muted"></p>
       </details>
+    </section>
+
+    <section id="stats" class="tab">
+      <div id="statsBody"></div>
     </section>
   </main>
 

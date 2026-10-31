@@ -50,6 +50,21 @@ small { color: #9a93a8; font-weight: normal; }
 .import input { display: block; margin: 10px 0; color: #d8d2c6; }
 code { background: #2a2636; padding: 1px 5px; border-radius: 4px; }
 
+/* Perfil */
+.nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+.nums div { background: #221e2e; border-radius: 16px; padding: 14px 8px; text-align: center; }
+.nums b { display: block; font-size: 1.4rem; color: #f2c14e; }
+.nums span { font-size: 0.8rem; color: #9a93a8; }
+.sgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.sbox { background: #221e2e; border-radius: 18px; padding: 14px 16px; }
+.sbox h3 { margin: 0 0 10px; font-size: 0.95rem; font-weight: normal; color: #d8d2c6; }
+.sbox h3 em { font-style: normal; font-weight: 600; color: #f2c14e; text-transform: capitalize; }
+.bar { display: grid; grid-template-columns: minmax(7.5em, 45%) 1fr 2.5em; align-items: center; gap: 8px; font-size: 0.85rem; margin: 5px 0; }
+.bar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: capitalize; }
+.bar i { height: 10px; border-radius: 99px; background: #f2c14e; min-width: 3px; }
+.bar b { font-weight: normal; color: #9a93a8; text-align: right; }
+@media (max-width: 420px) { .nums { grid-template-columns: repeat(2, 1fr); } }
+
 /* Modal */
 dialog { background: #1d1a26; color: #f3efe6; border: 0; border-radius: 18px; width: min(680px, 94vw); padding: 18px; }
 dialog::backdrop { background: #000a; }

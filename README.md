@@ -51,3 +51,10 @@ Mudanças no site (`index.html`, `app.js`, `style.css`) aparecem no app sem rein
 - Candidatos vêm das recomendações e dos semelhantes do TMDB de cada semente. Semelhantes só contam se dividirem um gênero com a semente. Recomendações de filmes que você não gostou derrubam a nota.
 - A nota final soma a força das sementes, a afinidade de gênero e a avaliação do filme. Cada cartão mostra o motivo.
 - Esgotou? Busca os mais bem avaliados dos seus 2 gêneros favoritos, sem os gêneros que você rejeita. Sem histórico nenhum, mostra os populares.
+
+## Perfil (estatísticas)
+
+A aba Perfil calcula, a partir dos filmes vistos (Letterboxd + app): total de filmes e horas, nota média, revistos, dia da semana e mês em que você mais assiste, gêneros, atores, diretores, décadas, países, distribuição de notas e gêneros com melhor nota média.
+
+- Dia e mês vêm do `diary.csv` (data em que você assistiu). Sem ele, usa a data de registro do `watched.csv`.
+- Duração, elenco, direção e países vêm do TMDB e ficam guardados no navegador (`filmes:det2`), então só a primeira análise demora.

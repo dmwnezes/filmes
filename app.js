@@ -366,10 +366,13 @@ $('#lbGo').onclick = async () => {
   const kinds = {};
   for (const f of files) {
     const n = f.name.toLowerCase();
-    const k = n.includes('rating') ? 'ratings' : n.includes('watchlist') ? 'watchlist' : n.includes('watched') ? 'watched' : null;
+    const k = n.includes('rating') ? 'ratings' : n.includes('watchlist') ? 'watchlist' : n.includes('watched') ? 'watched' : n.includes('diary') ? 'diary' : null;
     if (k) kinds[k] = parseCSV(await f.text());
   }
-  if (!Object.keys(kinds).length) { st.textContent = 'Nenhum watched.csv, ratings.csv ou watchlist.csv encontrado.'; return; }
+  if (!Object.keys(kinds).length) { st.textContent = 'Nenhum watched.csv, diary.csv, ratings.csv ou watchlist.csv encontrado.'; return; }
+  // Datas de cada sessão, para as estatísticas. diary.csv tem a data real em que você assistiu; watched.csv só a data do registro.
+  const logKind = kinds.diary ? 'diary' : 'watched';
+  const log = [];
 
   // limpa o que veio do Letterboxd antes; reimportar atualiza
   for (const id in DB) if (DB[id].src === 'lb') delete DB[id];
@@ -388,11 +391,16 @@ $('#lbGo').onclick = async () => {
         if (!m) return;
         const cur = DB[m.id];
         const own = cur && cur.src !== 'lb'; // marcação manual tem prioridade
-        if (k === 'watched' && !own) mark(m, { list: 'seen', src: 'lb' });
-        if (k === 'ratings') {
+        if (k === logKind) {
+          const date = row['Watched Date'] || row.Date;
+          if (date) log.push({ id: m.id, date, rewatch: row.Rewatch === 'Yes' });
+        }
+        if ((k === 'watched' || k === 'diary') && !own) mark(m, { list: 'seen', src: 'lb' });
+        if (k === 'ratings' || (k === 'diary' && row.Rating && !kinds.ratings)) {
           const r = parseFloat(row.Rating);
           const like = r >= 3.5 ? true : r <= 2 ? false : undefined;
-          if (!own) mark(m, { list: 'seen', src: 'lb', ...(like !== undefined ? { like } : {}) });
+          if (!own) mark(m, { list: 'seen', src: 'lb', ...(r ? { rating: r } : {}), ...(like !== undefined ? { like } : {}) });
+          else if (r) mark(m, { rating: r });
         }
         if (k === 'watchlist' && !own && !(DB[m.id]?.list)) mark(m, { list: 'later', src: 'lb' });
       } catch (err) { /* pula filme que a busca falhou */ }
@@ -403,10 +411,120 @@ $('#lbGo').onclick = async () => {
   }
   for (const id in DB) if (DB[id].src === 'lb' && DB[id].like === undefined && !DB[id].list) delete DB[id];
   saveDB();
+  if (kinds[logKind]) localStorage.setItem('filmes:lblog', JSON.stringify(log));
   st.textContent = `Pronto: ${jobs.length} linhas processadas.`;
   deck = []; // perfil novo vindo do Letterboxd
   refreshAll();
 };
+
+// ---------- perfil / estatísticas ----------
+// Detalhes compactos por filme (duração, elenco, direção, país), guardados para não buscar de novo.
+let DET = JSON.parse(localStorage.getItem('filmes:det2') || '{}'); // det2: países em português
+const PAIS = new Intl.DisplayNames(['pt-BR'], { type: 'region' });
+const DIAS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+async function details(id) {
+  if (DET[id]) return DET[id];
+  const d = await tm(`/movie/${id}`, { append_to_response: 'credits' });
+  DET[id] = {
+    runtime: d.runtime || 0,
+    genres: (d.genres || []).map((g) => g.name),
+    cast: (d.credits?.cast || []).slice(0, 5).map((c) => c.name),
+    dir: (d.credits?.crew || []).filter((c) => c.job === 'Director').map((c) => c.name),
+    countries: (d.production_countries || []).map((c) => PAIS.of(c.iso_3166_1) || c.name),
+    year: (d.release_date || '').slice(0, 4),
+  };
+  return DET[id];
+}
+
+const count = (arr) => arr.reduce((o, k) => ((o[k] = (o[k] || 0) + 1), o), {});
+const topN = (o, n) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, n);
+
+// Pura: recebe filmes vistos (com detalhes) e sessões datadas, devolve os números.
+function computeStats(films, sessions) {
+  const all = (f) => films.flatMap(f);
+  const ratings = films.map((m) => m.rating).filter(Boolean);
+  const dates = sessions.map((s) => new Date(s.date + 'T12:00:00')).filter((d) => !isNaN(d));
+  const years = count(dates.map((d) => d.getFullYear()));
+  return {
+    total: films.length,
+    sessions: sessions.length,
+    rewatches: sessions.filter((s) => s.rewatch).length,
+    hours: Math.round(films.reduce((a, m) => a + (m.det.runtime || 0), 0) / 60),
+    avg: ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0,
+    ratingDist: count(ratings.map(String)),
+    weekday: count(dates.map((d) => d.getDay())),
+    month: count(dates.map((d) => d.getMonth())),
+    years,
+    genres: count(all((m) => m.det.genres)),
+    actors: count(all((m) => m.det.cast)),
+    directors: count(all((m) => m.det.dir)),
+    countries: count(all((m) => m.det.countries)),
+    decades: count(films.map((m) => m.det.year).filter(Boolean).map((y) => y.slice(0, 3) + '0')),
+    longest: films.filter((m) => m.det.runtime).sort((a, b) => b.det.runtime - a.det.runtime)[0],
+    // nota média por gênero (só gêneros com 3+ filmes avaliados)
+    genreAvg: Object.entries(films.filter((m) => m.rating).reduce((o, m) => {
+      m.det.genres.forEach((g) => (o[g] = o[g] || []).push(m.rating));
+      return o;
+    }, {})).filter(([, r]) => r.length >= 3).map(([g, r]) => [g, r.reduce((a, b) => a + b, 0) / r.length]).sort((a, b) => b[1] - a[1]),
+  };
+}
+
+function bars(rows, fmt = (v) => v) {
+  const max = Math.max(1, ...rows.map((r) => r[1]));
+  return rows.map(([k, v]) => `<div class="bar"><span>${esc(k)}</span><i style="width:${(v / max) * 100}%"></i><b>${fmt(v)}</b></div>`).join('');
+}
+
+let statsBusy = false;
+async function renderStats() {
+  const el = $('#statsBody');
+  const seen = Object.values(DB).filter((m) => isSeen(m.id));
+  if (!seen.length) {
+    el.innerHTML = '<p class="muted center">Sem histórico ainda. Importe do Letterboxd em Listas para ver seu perfil.</p>';
+    return;
+  }
+  if (statsBusy) return;
+  statsBusy = true;
+  try {
+    const missing = seen.filter((m) => !DET[m.id]);
+    for (let i = 0; i < missing.length; i += 6) {
+      el.innerHTML = `<p class="muted center">Analisando seus filmes… ${i} de ${missing.length}</p>`;
+      await Promise.allSettled(missing.slice(i, i + 6).map((m) => details(m.id)));
+      localStorage.setItem('filmes:det2', JSON.stringify(DET));
+    }
+  } finally { statsBusy = false; }
+
+  const films = seen.filter((m) => DET[m.id]).map((m) => ({ ...m, det: DET[m.id] }));
+  const log = JSON.parse(localStorage.getItem('filmes:lblog') || '[]');
+  // sessões do Letterboxd + o que você marcou no próprio app
+  const sessions = [...log, ...seen.filter((m) => m.src !== 'lb' && m.addedAt).map((m) => ({ id: m.id, date: new Date(m.addedAt).toISOString().slice(0, 10) }))];
+  const s = computeStats(films, sessions);
+
+  const wd = DIAS.map((d, i) => [d, s.weekday[i] || 0]);
+  const fav = [...wd].sort((a, b) => b[1] - a[1])[0];
+  const mo = MESES.map((m, i) => [m, s.month[i] || 0]);
+  const favMo = [...mo].sort((a, b) => b[1] - a[1])[0];
+  const favYear = topN(s.years, 1)[0];
+  const box = (t, body) => `<div class="sbox"><h3>${t}</h3>${body}</div>`;
+  const nums = (rows) => `<div class="nums">${rows.map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join('')}</div>`;
+
+  el.innerHTML = `
+    ${nums([['filmes', s.total], ['horas', s.hours.toLocaleString('pt-BR')], ['nota média', s.avg ? '★ ' + s.avg.toFixed(1).replace('.', ',') : '–'], ['revistos', s.rewatches]])}
+    <div class="sgrid">
+      ${sessions.length ? box(`Dia preferido: <em>${fav[0]}</em>`, bars(wd)) : box('Dia preferido', '<p class="muted">Importe o <code>diary.csv</code> do Letterboxd para saber em que dias você assiste.</p>')}
+      ${sessions.length ? box(`Mês mais ativo: <em>${favMo[0]}</em>`, bars(mo) + (favYear ? `<p class="muted">Ano com mais filmes: ${favYear[0]} (${favYear[1]})</p>` : '')) : ''}
+      ${box(`Gênero favorito: <em>${esc(topN(s.genres, 1)[0]?.[0] || '–')}</em>`, bars(topN(s.genres, 8)))}
+      ${box(`Ator/atriz mais visto: <em>${esc(topN(s.actors, 1)[0]?.[0] || '–')}</em>`, bars(topN(s.actors, 8)))}
+      ${box(`Diretor mais visto: <em>${esc(topN(s.directors, 1)[0]?.[0] || '–')}</em>`, bars(topN(s.directors, 6)))}
+      ${box('Décadas', bars(Object.entries(s.decades).sort((a, b) => a[0] - b[0]).map(([d, v]) => [d + 's', v])))}
+      ${box('Países', bars(topN(s.countries, 6)))}
+      ${Object.keys(s.ratingDist).length ? box('Suas notas', bars(Object.entries(s.ratingDist).sort((a, b) => a[0] - b[0]).map(([r, v]) => ['★ ' + r.replace('.', ','), v]))) : ''}
+      ${s.genreAvg.length ? box('Gêneros que você avalia melhor', bars(s.genreAvg.slice(0, 6), (v) => v.toFixed(1).replace('.', ','))) : ''}
+    </div>
+    ${s.longest ? `<p class="muted center">Filme mais longo: ${esc(s.longest.title)} (${Math.floor(s.longest.det.runtime / 60)}h${String(s.longest.det.runtime % 60).padStart(2, '0')})</p>` : ''}
+    <p class="muted center">Com base em ${films.length} filmes vistos${sessions.length ? ` e ${sessions.length} sessões com data` : ''}.</p>`;
+}
 
 // ---------- abas ----------
 document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
@@ -414,6 +532,7 @@ document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
   b.classList.add('on');
   $('#' + b.dataset.tab).classList.add('on');
   if (b.dataset.tab === 'listas') renderLists();
+  if (b.dataset.tab === 'stats') renderStats();
 });
 
 // ---------- início ----------

@@ -65,6 +65,27 @@ code { background: #2a2636; padding: 1px 5px; border-radius: 4px; }
 .bar b { font-weight: normal; color: #9a93a8; text-align: right; }
 @media (max-width: 420px) { .nums { grid-template-columns: repeat(2, 1fr); } }
 
+/* Roleta */
+nav { flex-wrap: wrap; }
+@media (max-width: 440px) { header { padding: 12px 12px; } nav { gap: 4px; } nav button { padding: 7px 9px; font-size: 0.85rem; } }
+.rbox { max-width: 520px; margin: 10px auto; display: flex; flex-direction: column; gap: 14px; }
+.rbox h2 { margin: 6px 0; }
+.rbar { height: 8px; border-radius: 99px; background: #2a2636; }
+.rbar i { display: block; height: 8px; border-radius: 99px; background: #f2c14e; transition: width 0.3s; }
+.ropts { display: flex; flex-direction: column; gap: 10px; }
+.ropts button { text-align: left; padding: 15px 18px; border-radius: 18px; background: #221e2e; font-size: 1rem; }
+.ropts button:hover, .ropts button:focus-visible { background: #f2c14e; color: #15131c; }
+button.big { padding: 14px 22px; background: #f2c14e; color: #15131c; font-weight: 600; font-size: 1rem; }
+button.link { background: none; color: #9a93a8; text-decoration: underline; }
+.rstrip { position: relative; overflow: hidden; border-radius: 18px; background: #0e0c14; padding: 14px 0; margin-bottom: 16px; }
+.rmark { position: absolute; left: 50%; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: #f2c14e; z-index: 1; box-shadow: 0 0 14px #f2c14e; }
+.rtrack { display: flex; gap: 8px; width: max-content; will-change: transform; }
+.rtrack img { width: 110px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 10px; background: #2a2636; }
+.rcard { width: min(340px, 100%); margin: 0 auto; cursor: default; }
+#rResult { scroll-margin-top: 110px; display: flex; flex-direction: column; align-items: center; gap: 12px; animation: rIn 0.4s ease; }
+.ractions { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+@keyframes rIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
 /* Modal */
 dialog { background: #1d1a26; color: #f3efe6; border: 0; border-radius: 18px; width: min(680px, 94vw); padding: 18px; }
 dialog::backdrop { background: #000a; }

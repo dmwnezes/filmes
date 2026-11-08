@@ -58,3 +58,14 @@ A aba Perfil calcula, a partir dos filmes vistos (Letterboxd + app): total de fi
 
 - Dia e mês vêm do `diary.csv` (data em que você assistiu). Sem ele, usa a data de registro do `watched.csv`.
 - Duração, elenco, direção e países vêm do TMDB e ficam guardados no navegador (`filmes:det2`), então só a primeira análise demora.
+
+## Roleta
+
+Aba com 10 perguntas (clima, duração, companhia, ritmo, final, realidade/fantasia, cenas pesadas, época, origem, fama) que sorteia um filme.
+
+- Duração, época, origem e fama viram filtros do `discover` do TMDB. Clima, companhia, ritmo, final e realidade viram votos por gênero.
+- Os candidatos ganham nota pelos votos e o sorteio é ponderado entre os 25 que mais combinam. Filmes já vistos ou marcados ficam de fora.
+- Gêneros que você prefere evitar (terror/guerra, ou os de adulto quando é com a família) são filtrados no app.
+- "Internacional" faz uma busca por país (o TMDB só garante filtro de um país por vez).
+- Se não sobrarem 8 filmes, afrouxa os filtros nesta ordem: origem, época, fama, duração, e avisa quais afrouxou.
+- "Sortear outro" tira outro do mesmo grupo, sem refazer as perguntas.

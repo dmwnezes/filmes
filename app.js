@@ -93,6 +93,8 @@ document.addEventListener('click', (e) => {
 });
 
 function refreshAll() {
+  const rs = $('#rStatus');
+  if (rs && rol.pick) rs.textContent = status(rol.pick.id); // marcou pela roleta: atualiza a etiqueta sem refazer o sorteio
   renderDeck();
   renderResults();
   renderLists();
@@ -525,6 +527,231 @@ async function renderStats() {
     ${s.longest ? `<p class="muted center">Filme mais longo: ${esc(s.longest.title)} (${Math.floor(s.longest.det.runtime / 60)}h${String(s.longest.det.runtime % 60).padStart(2, '0')})</p>` : ''}
     <p class="muted center">Com base em ${films.length} filmes vistos${sessions.length ? ` e ${sessions.length} sessões com data` : ''}.</p>`;
 }
+
+// ---------- roleta ----------
+// 10 perguntas viram filtros duros (duração, época, origem, fama) + votos por gênero.
+// Os filmes vêm do TMDB, ganham nota pelos votos e o sorteio é ponderado entre os 25 que mais combinam.
+const PERGUNTAS = [
+  { q: 'Qual o clima de hoje?', o: [
+    { t: 'Quero rir', v: { 35: 3 } },
+    { t: 'Quero me emocionar', v: { 18: 3, 10749: 2, 10402: 1 } },
+    { t: 'Quero adrenalina', v: { 28: 3, 53: 2, 12: 1 } },
+    { t: 'Quero pensar', v: { 9648: 2, 878: 2, 80: 1, 53: 1, 18: 1 } },
+    { t: 'Quero sonhar', v: { 14: 3, 16: 2, 12: 2, 878: 1 } } ] },
+  { q: 'Quanto tempo você tem?', k: 'tempo', o: [
+    { t: 'Até 1h40', f: { 'with_runtime.lte': 100 } },
+    { t: 'Entre 1h40 e 2h15', f: { 'with_runtime.gte': 100, 'with_runtime.lte': 135 } },
+    { t: 'Mais de 2h15, sem pressa', f: { 'with_runtime.gte': 135 } },
+    { t: 'Tanto faz', f: {} } ] },
+  { q: 'Com quem você vai assistir?', o: [
+    { t: 'Sozinho', v: {} },
+    { t: 'Com a pessoa amada', v: { 10749: 2, 35: 1 } },
+    { t: 'Com a família, com crianças', v: { 10751: 3, 16: 2, 12: 1 }, x: [27, 53, 80, 10752] },
+    { t: 'Com os amigos', v: { 35: 2, 28: 1, 27: 1 } } ] },
+  { q: 'Que ritmo você quer?', o: [
+    { t: 'Calmo e contemplativo', v: { 18: 2, 10749: 1, 36: 1 } },
+    { t: 'Equilibrado', v: {} },
+    { t: 'Acelerado, sem respiro', v: { 28: 2, 53: 2, 12: 1 } } ] },
+  { q: 'Como você quer que termine?', o: [
+    { t: 'Final feliz', v: { 35: 1, 10749: 1, 10751: 1, 16: 1 } },
+    { t: 'Com uma reviravolta', v: { 9648: 2, 53: 2, 878: 1 } },
+    { t: 'Agridoce, que fique na cabeça', v: { 18: 2, 10749: 1 } },
+    { t: 'Tanto faz', v: {} } ] },
+  { q: 'Realidade ou imaginação?', o: [
+    { t: 'Algo realista, história real', v: { 18: 1, 36: 2, 80: 1, 10752: 1 } },
+    { t: 'Fantasia e ficção científica', v: { 14: 2, 878: 2, 16: 1, 12: 1 } },
+    { t: 'Tanto faz', v: {} } ] },
+  { q: 'Aguenta cenas pesadas, como terror e guerra?', o: [
+    { t: 'Aguento e até gosto', v: { 27: 1.5, 53: 1, 80: 1, 10752: 1 } },
+    { t: 'Tanto faz', v: {} },
+    { t: 'Prefiro evitar', v: {}, x: [27, 10752] } ] },
+  { q: 'De que época?', k: 'epoca', o: [
+    { t: 'Recente (de 2018 em diante)', f: { 'primary_release_date.gte': '2018-01-01' } },
+    { t: 'Anos 2000 e 2010', f: { 'primary_release_date.gte': '2000-01-01', 'primary_release_date.lte': '2017-12-31' } },
+    { t: 'Clássico (antes de 2000)', f: { 'primary_release_date.lte': '1999-12-31' } },
+    { t: 'Tanto faz', f: {} } ] },
+  { q: 'De onde?', k: 'origem', o: [
+    { t: 'Brasileiro', f: { with_origin_country: 'BR' } },
+    { t: 'Americano', f: { with_origin_country: 'US' } },
+    { t: 'Internacional (França, Coreia, Japão e mais)', f: { with_origin_country: 'FR|KR|JP|GB|ES|IT|DE|IN|MX|AR|DK|SE' } },
+    { t: 'Tanto faz', f: {} } ] },
+  { q: 'Famoso ou joia escondida?', k: 'fama', o: [
+    { t: 'Famoso e bem avaliado', f: { 'vote_count.gte': 5000, 'vote_average.gte': 7 } },
+    { t: 'Joia escondida', f: { 'vote_count.gte': 300, 'vote_count.lte': 2500, 'vote_average.gte': 7.2 } },
+    { t: 'Me surpreenda', f: { 'vote_count.gte': 500, 'vote_average.gte': 6.5 } } ] },
+];
+const RELAXA = ['origem', 'epoca', 'fama', 'tempo']; // ordem em que os filtros são afrouxados quando faltam filmes
+const RELAXA_NOME = { origem: 'origem', epoca: 'época', fama: 'fama', tempo: 'duração' };
+let rol = { stage: 'intro', ans: [], pool: [], votes: {}, relax: [], drawn: new Set(), pick: null };
+
+function rolQuery(relax) {
+  const p = { include_adult: 'false', 'vote_count.gte': 100, 'vote_average.gte': 5.5 };
+  const votes = {};
+  const ex = new Set();
+  rol.ans.forEach((a, i) => {
+    const q = PERGUNTAS[i];
+    const o = q.o[a];
+    for (const [g, w] of Object.entries(o.v || {})) votes[g] = (votes[g] || 0) + w;
+    (o.x || []).forEach((g) => ex.add(g));
+    if (!relax.includes(q.k)) Object.assign(p, o.f || {});
+  });
+  ex.forEach((g) => delete votes[g]);
+  const top = Object.entries(votes).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([g]) => g);
+  if (top.length) p.with_genres = top.join('|');
+  // Gêneros excluídos são filtrados aqui no app, sem depender de como o TMDB lê "without_genres".
+  return { p, votes, ex: [...ex] };
+}
+
+async function rolFetch() {
+  let last;
+  for (let n = 0; n <= RELAXA.length; n++) {
+    const relax = RELAXA.slice(0, n);
+    const { p, votes, ex } = rolQuery(relax);
+    // Vários países = uma busca por país: só o filtro de país único é garantido no TMDB.
+    const countries = p.with_origin_country?.split('|') || [];
+    const variants = countries.length > 1 ? shuffle(countries).slice(0, 4).map((c) => ({ ...p, with_origin_country: c })) : [p];
+    const perVariant = variants.length > 1 ? 2 : 3;
+    const lists = await Promise.allSettled(variants.map(async (v) => {
+      const first = await tm('/discover/movie', { ...v, page: 1 });
+      const pages = Math.min(first.total_pages || 1, 6);
+      const extra = shuffle([...Array(Math.max(pages - 1, 0)).keys()].map((i) => i + 2)).slice(0, perVariant - 1);
+      const more = await Promise.allSettled(extra.map((pg) => tm('/discover/movie', { ...v, page: pg })));
+      return [...first.results, ...more.flatMap((r) => (r.status === 'fulfilled' ? r.value.results : []))];
+    }));
+    if (lists.every((l) => l.status === 'rejected')) throw lists[0].reason;
+    const ids = new Set();
+    const pool = [];
+    for (const x of lists.flatMap((l) => (l.status === 'fulfilled' ? l.value : []))) {
+      if (!x.poster_path || known(x.id) || ids.has(x.id) || (x.genre_ids || []).some((g) => ex.includes(g))) continue;
+      ids.add(x.id);
+      pool.push(x);
+    }
+    last = { pool, votes, relax };
+    if (pool.length >= 8) break;
+  }
+  return last;
+}
+
+const rolScore = (m) => (m.genre_ids || []).reduce((s, g) => s + (rol.votes[g] || 0), 0) + ((m.vote_average || 6) - 6) / 2;
+
+function rolDraw() {
+  const alive = rol.pool.filter((m) => !known(m.id) && !rol.drawn.has(m.id));
+  if (!alive.length) return null;
+  const ranked = alive.map((m) => ({ m, s: rolScore(m) })).sort((a, b) => b.s - a.s).slice(0, 25);
+  const w = ranked.map((r) => Math.max(0.2, r.s) ** 2);
+  let x = Math.random() * w.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < ranked.length; i++) { x -= w[i]; if (x <= 0) return ranked[i].m; }
+  return ranked[0].m;
+}
+
+async function rolRun() {
+  rol.stage = 'load';
+  renderRoleta();
+  try {
+    const r = await rolFetch();
+    Object.assign(rol, { pool: r.pool, votes: r.votes, relax: r.relax, drawn: new Set() });
+    rolNext();
+  } catch (e) {
+    rol.stage = 'error';
+    rol.err = e.message;
+    renderRoleta();
+  }
+}
+
+function rolNext() {
+  const m = rolDraw();
+  if (!m) { rol.stage = 'empty'; renderRoleta(); return; }
+  rol.drawn.add(m.id);
+  rol.pick = m;
+  rol.stage = 'spin';
+  renderRoleta();
+}
+
+function renderRoleta() {
+  const el = $('#rolBody');
+  const n = rol.ans.length;
+  if (rol.stage === 'intro') {
+    el.innerHTML = `<div class="rbox"><h2>Roleta de filmes</h2>
+      <p class="muted">Responda 10 perguntas rápidas e eu sorteio um filme pra você. Os que você já viu ficam de fora.</p>
+      <button class="big" data-rstart>Começar</button></div>`;
+  } else if (rol.stage === 'ask') {
+    const q = PERGUNTAS[n];
+    el.innerHTML = `<div class="rbox">
+      <div class="rbar"><i style="width:${(n / PERGUNTAS.length) * 100}%"></i></div>
+      <p class="muted center">Pergunta ${n + 1} de ${PERGUNTAS.length}</p>
+      <h2 class="center">${esc(q.q)}</h2>
+      <div class="ropts">${q.o.map((o, i) => `<button data-r="${i}">${esc(o.t)}</button>`).join('')}</div>
+      ${n ? '<button class="link" data-rback>← Voltar</button>' : ''}</div>`;
+  } else if (rol.stage === 'load') {
+    el.innerHTML = '<p class="muted center">Girando a roleta…</p>';
+  } else if (rol.stage === 'error') {
+    el.innerHTML = `<div class="rbox"><p class="muted center">Não consegui falar com o TMDB (${esc(rol.err)}).</p>
+      <button class="big" data-rretry>Tentar de novo</button></div>`;
+  } else if (rol.stage === 'empty') {
+    el.innerHTML = `<div class="rbox"><p class="muted center">Acabaram as opções novas para essas respostas.</p>
+      <button class="big" data-rredo>Refazer as perguntas</button></div>`;
+  } else if (rol.stage === 'spin') {
+    rolSpin();
+  }
+}
+
+const ROL_ITEM = 118; // largura do pôster + espaço, em px
+const ROL_WIN = 24; // posição do vencedor na fita
+
+function rolSpin() {
+  const m = rol.pick;
+  const others = rol.pool.filter((x) => x.id !== m.id).map((x) => x.poster_path);
+  const strip = Array.from({ length: 30 }, (_, i) => (i === ROL_WIN ? m.poster_path : others[Math.floor(Math.random() * others.length)] || m.poster_path));
+  $('#rolBody').innerHTML = `<div class="rstrip"><div class="rmark"></div>
+    <div class="rtrack" id="rTrack">${strip.map((p) => `<img src="${IMG + p}" alt="">`).join('')}</div></div>
+    <div id="rResult"></div>`;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { rolReveal(m); return; }
+  const track = $('#rTrack');
+  const target = ROL_WIN * ROL_ITEM + ROL_ITEM / 2 - track.parentElement.clientWidth / 2 + (Math.random() - 0.5) * 60;
+  track.style.transition = 'none';
+  track.style.transform = 'translateX(0)';
+  void track.offsetWidth; // força o início da animação em 0
+  track.style.transition = 'transform 4.6s cubic-bezier(.12,.7,.1,1)';
+  track.style.transform = `translateX(${-target}px)`;
+  setTimeout(() => { if (rol.pick === m && rol.stage === 'spin') rolReveal(m); }, 4700);
+}
+
+function rolReveal(m) {
+  const f = norm(m);
+  const hit = (m.genre_ids || []).filter((g) => rol.votes[g] > 0).map((g) => GENRES[g]).filter(Boolean);
+  const resp = rol.ans.map((a, i) => PERGUNTAS[i].o[a].t).filter((t) => t !== 'Tanto faz');
+  $('#rResult').innerHTML = `<article class="card rcard">
+      <img class="poster" data-open="${f.id}" src="${f.poster ? IMG + f.poster : ''}" alt="">
+      <div class="info">
+        <h3>${esc(f.title)} <small>${esc(f.year)}</small></h3>
+        <p class="genres">${esc(f.genres.join(' · '))}</p>
+        ${hit.length ? `<p class="why">Combina com o que você pediu: ${esc(hit.join(', '))}</p>` : ''}
+        <p class="syn">${esc(short(f.overview || 'Sem sinopse.', 400))}</p>
+        <span class="status" id="rStatus">${status(f.id)}</span>
+      </div>
+    </article>
+    ${miniActions(f.id)}
+    ${rol.relax.length ? `<p class="muted center">Não achei filme com tudo, então afrouxei: ${rol.relax.map((k) => RELAXA_NOME[k]).join(', ')}.</p>` : ''}
+    <div class="ractions"><button class="big" data-rspin>Sortear outro</button><button class="link" data-rredo>Refazer as perguntas</button></div>
+    <p class="muted center">Suas respostas: ${esc(resp.join(' · '))}</p>`;
+  $('#rResult').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function rolReset() { rol = { stage: 'ask', ans: [], pool: [], votes: {}, relax: [], drawn: new Set(), pick: null }; renderRoleta(); }
+
+$('#roleta').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.r !== undefined) {
+    rol.ans.push(Number(b.dataset.r));
+    if (rol.ans.length === PERGUNTAS.length) rolRun(); else renderRoleta();
+  } else if ('rback' in b.dataset) { rol.ans.pop(); renderRoleta(); }
+  else if ('rstart' in b.dataset) { rol.stage = 'ask'; renderRoleta(); }
+  else if ('rredo' in b.dataset) rolReset();
+  else if ('rretry' in b.dataset) rolRun();
+  else if ('rspin' in b.dataset) rolNext();
+});
+renderRoleta();
 
 // ---------- abas ----------
 document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
